@@ -1,5 +1,5 @@
 '''
-여러 개의 특성을 사용한 선형 회구를 다중 회귀라고 부릅니다.
+여러 개의 특성을 사용한 선형 회귀를 <다중 회귀>라고 부릅니다.
 특성이 2개면 타깃값과 함께 3차원 공간을 형성하고, 선형 회귀 방정식 '타깃 = a * 특성1 + b* 특성2 + 절편은 평면이 됩니다.
 - 이 예제에서는 농어의 길이뿐만 아니라 농어의 높이와 두께도 함께 사용합니다.
 '''
@@ -93,5 +93,99 @@ print(lr.score(train_poly, train_target))   # 0.999999...
 print(lr.score(test_poly, test_target))     # -144.40226...
 
 '''
-규제
+규제 (regularization)
+: 머신러닝 모델이 훈련 세트를 너무 과도하게 학습하지 못하도록 훼방하는 것을 말합니다.
+  즉 모델이 훈련 세트에 과대적합되지 않도록 만드는 것입니다. 선형 회귀 모델의 경우 특성에 곱해지는 계수(또는 기울기)의 크기를 작게 만드는 일입니다.
 '''
+# StatndardScaler 클래스를 사용해 표준점수를 구합니다.
+from sklearn.preprocessing import StandardScaler
+
+ss = StandardScaler()
+# 훈련
+ss.fit(train_poly)
+# 표준점수로 변환한 train_scaled와 test_scaled
+train_scaled = ss.transform(train_poly)
+test_scaled = ss.transform(test_poly)
+
+'''
+- 릿지(ridge) 회귀 - 
+선형회귀 모델에 규제를 추가한 모델을 릿지와 라쏘라고 부릅니다.
+릿지는 계수를 제곱한 값을 기준으로 규제를 적용하고,
+라쏘는 계수의 절댓값을 기준으로 규제를 적용합니다.
+'''
+print('\n - Ridge 회귀 -')
+from sklearn.linear_model import Ridge
+
+ridge = Ridge()
+ridge.fit(train_scaled, train_target)
+print('ridge train: ', ridge.score(train_scaled, train_target))
+
+# 적절한 alpha 값을 찾는 한 가지 방법은 alpha에 대한 R^2 값의 그래프를 그려 보는 것입니다.
+import matplotlib.pyplot as plt
+train_score = []
+test_score = []
+
+alpha_list = [0.001, 0.01, 0.1, 1, 10, 100]
+for alpha in alpha_list:
+       ridge = Ridge(alpha=alpha)
+       # 훈련
+       ridge.fit(train_scaled, train_target)
+       # 훈련 점수와 테스트 점수를 저장
+       train_score.append(ridge.score(train_scaled, train_target))
+       test_score.append(ridge.score(test_scaled, test_target))
+
+# alpha 값을 0.001 부터 10배씩 늘렸기 때문에 그래프를 그리면 왼쪽이 너무 촘촘해 집니다.
+# alpha_list에 있는 6개의 값을 동일한 간격으로 나타내기 위해 로그 함수로 바꾸어 지수로 표현하겠습니다.
+# np.log()는 자연로그, np.log10() 상용로그
+plt.plot(np.log10(alpha_list), train_score)
+plt.plot(np.log10(alpha_list), test_score)
+plt.xlabel('alpha')
+plt.ylabel('R^2')
+plt.show()
+
+# 적절한 alpha 값은 두 그래프가 가장 가깝고 테스트 세트의 점수가 가장 높은 -1, 즉 10^-1=0.1입니다.
+# alpha 값을 0.1로 하여 최종 모델을 훈련합니다.
+ridge = Ridge(alpha=0.1)
+ridge.fit(train_scaled, train_target)
+# 이 모델은 훈련 세트와 테스트 세트의 점수가 비슷하게 모두 높고 과대적합과 과소적합 사이에서 균형을 맞추고 있습니다.
+print('ridge train(alpha=0.1): ', ridge.score(train_scaled, train_target))
+print('ridge test(alpha=0.1): ', ridge.score(test_scaled, test_target))
+
+'''
+라쏘 회귀
+'''
+print('\n- Lasso 회귀 -')
+from sklearn.linear_model import Lasso
+
+lasso = Lasso()
+lasso.fit(train_scaled, train_target)
+# 라쏘도 과대적합을 잘 억제한 결과를 보여줍니다.
+print('lasso train: ', lasso.score(train_scaled, train_target))
+# 테스트 세트의 점수도 릿지만큼 아주 좋습니다.
+print('lasso test: ', lasso.score(test_scaled, test_target))
+# 라소 모델의 alpha값 찾기
+train_score = []
+test_score = []
+alpha_list = [0.001, 0.01, 0.1, 1, 10, 100]
+for alpha in alpha_list:
+       lasso = Lasso(alpha=alpha, max_iter=10000)
+       # 훈련
+       lasso.fit(train_scaled, train_target)
+       # 훈련 점수와 테스트 점수를 저장
+       train_score.append(lasso.score(train_scaled, train_target))
+       test_score.append(lasso.score(test_scaled, test_target))
+
+# 라쏘 모델에서 최적의 alpha 값은 그래프에서 보듯이 1, 즉 10^1=10 입니다.
+plt.plot(np.log10(alpha_list), train_score)
+plt.plot(np.log10(alpha_list), test_score)
+plt.xlabel('alpha')
+plt.ylabel('R^2')
+plt.show()
+
+# 최적의 alpha 값으로 다시 모델을 훈련합니다.
+lasso = Lasso(alpha=10)
+lasso.fit(train_scaled, train_target)
+# 특성을 많이 사용했지만 릿지와 마찬가지로 라쏘 모델이 과대적합을 잘 억제하고 테스트 세트의 성능을 크게 높였습니다.
+print('lasso train(alpha=10): ', lasso.score(train_scaled, train_target))
+print('lasso test(alpha=10): ', lasso.score(test_scaled, test_target))
+
